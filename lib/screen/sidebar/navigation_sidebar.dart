@@ -24,6 +24,10 @@ class NavigationSidebar extends StatelessWidget {
       icon: Icons.home,
       label: '主界面',
     ),
+    NavigationItem(
+      icon: Icons.question_answer,
+      label: '问题'
+    ),
     // 可在此处添加更多导航项
     // NavigationItem(icon: Icons.settings, label: '设置'),
   ];

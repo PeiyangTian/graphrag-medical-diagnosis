@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'sender.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -47,6 +48,10 @@ class _HomePageState extends State<HomePage> {
                   ElevatedButton(
                     onPressed: () {
                       // 主界面按钮点击事件
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const InputSenderPage()),
+                      );
                     },
                     child: const Text('添加内容'),
                   ),

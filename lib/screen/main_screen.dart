@@ -1,3 +1,4 @@
+import 'package:class_project/screen/page/sender.dart';
 import 'package:flutter/material.dart';
 import 'sidebar/navigation_sidebar.dart';
 import 'page/user_page.dart';
@@ -20,6 +21,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _pages = const [
     UserPage(),
     HomePage(),
+    InputSenderPage(),
   ];
 
   // 切换导航栏展开状态
