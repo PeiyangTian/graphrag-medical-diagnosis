@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-# from query import query
+from query import query
 
 app = FastAPI()
 
@@ -9,8 +9,7 @@ class UserRequest(BaseModel):
     userInput: str
 
 # 测试
-def query(question: str) -> str:
-    return "HELLO"
+
 
 @app.post('/process')
 def process_request(req: UserRequest):
@@ -21,6 +20,8 @@ def process_request(req: UserRequest):
         print("用户输入: ", user_input)
         # 调用处理函数
         result = query(user_input)
+        # 显示结果
+        print(result)
         # 返回结果
         return {'result': result}
     except Exception as e:

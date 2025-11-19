@@ -1,109 +1,57 @@
-import os
+import subprocess
+import shlex
 
-import pandas as pd
-
-from graphrag.config.enums import ModelType
-from graphrag.config.models.language_model_config import LanguageModelConfig
-from graphrag.language_model.manager import ModelManager
-from graphrag.query.indexer_adapters import (
-    read_indexer_communities,
-    read_indexer_entities,
-    read_indexer_reports,
-)
-from graphrag.query.structured_search.global_search.community_context import (
-    GlobalCommunityContext,
-)
-from graphrag.query.structured_search.global_search.search import GlobalSearch
-from graphrag.tokenizer.get_tokenizer import get_tokenizer
-
-
-def query(question: str) -> str:
-    api_key = os.environ["GRAPHRAG_API_KEY"]
-
-    config = LanguageModelConfig(
-        api_key=api_key,
-        type=ModelType.Chat,
-        model_provider="openai",
-        model="gpt-4.1",
-        max_retries=20,
-    )
-    model = ModelManager().get_or_create_chat_model(
-        name="global_search",
-        model_type=ModelType.Chat,
-        config=config,
-    )
-
-    tokenizer = get_tokenizer(config)
-
-    # parquet files generated from indexing pipeline
-    INPUT_DIR = "./inputs/operation dulce"
-    COMMUNITY_TABLE = "communities"
-    COMMUNITY_REPORT_TABLE = "community_reports"
-    ENTITY_TABLE = "entities"
-
-    # community level in the Leiden community hierarchy from which we will load the community reports
-    # higher value means we use reports from more fine-grained communities (at the cost of higher computation cost)
-    COMMUNITY_LEVEL = 2
-
-    community_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_TABLE}.parquet")
-    entity_df = pd.read_parquet(f"{INPUT_DIR}/{ENTITY_TABLE}.parquet")
-    report_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_REPORT_TABLE}.parquet")
-
-    communities = read_indexer_communities(community_df, report_df)
-    reports = read_indexer_reports(report_df, community_df, COMMUNITY_LEVEL)
-    entities = read_indexer_entities(entity_df, community_df, COMMUNITY_LEVEL)
-
-    print(f"Total report count: {len(report_df)}")
-    print(
-        f"Report count after filtering by community level {COMMUNITY_LEVEL}: {len(reports)}"
-    )
-
-    report_df.head()
-
-    context_builder_params = {
-        "use_community_summary": False,
-        # False means using full community reports. True means using community short summaries.
-        "shuffle_data": True,
-        "include_community_rank": True,
-        "min_community_rank": 0,
-        "community_rank_name": "rank",
-        "include_community_weight": True,
-        "community_weight_name": "occurrence weight",
-        "normalize_community_weight": True,
-        "max_tokens": 12_000,
-        # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 5000)
-        "context_name": "Reports",
-    }
-
-    map_llm_params = {
-        "max_tokens": 1000,
-        "temperature": 0.0,
-        "response_format": {"type": "json_object"},
-    }
-
-    reduce_llm_params = {
-        "max_tokens": 2000,
-        # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 1000-1500)
-        "temperature": 0.0,
-    }
-
-    search_engine = GlobalSearch(
-        model=model,
-        context_builder=context_builder,
-        tokenizer=tokenizer,
-        max_data_tokens=12_000,
-        # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 5000)
-        map_llm_params=map_llm_params,
-        reduce_llm_params=reduce_llm_params,
-        allow_general_knowledge=False,
-        # set this to True will add instruction to encourage the LLM to incorporate general knowledge in the response, which may increase hallucinations, but could be useful in some use cases.
-        json_mode=True,  # set this to False if your LLM model does not support JSON mode.
-        context_builder_params=context_builder_params,
-        concurrent_coroutines=32,
-        response_type="multiple paragraphs",
-        # free form text describing the response type and format, can be anything, e.g. prioritized list, single paragraph, multiple paragraphs, multiple-page report
-    )
-
-    result = search_engine.search(question)
-
-    return result.response
+def query(query: str) -> str:
+    """
+    调用graphrag执行查询并提取最终结果（过滤过程信息）
+    
+    参数:
+        query: 要执行的查询字符串
+        
+    返回:
+        提取后的最终结果；若失败则返回错误信息
+    """
+    try:
+        # 构建命令（可尝试添加--quiet等参数减少过程输出，需先确认graphrag是否支持）
+        command = f'graphrag query --root C:/Users/qiu38/ragtest1 --method global -q "{query}"'
+        
+        # 执行命令，获取字节流输出
+        result = subprocess.run(
+            shlex.split(command),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        
+        # 处理编码（兼容Windows）
+        try:
+            full_output = result.stdout.decode('utf-8')
+        except UnicodeDecodeError:
+            full_output = result.stdout.decode('gbk', errors='replace')
+        
+        # --------------------------
+        # 核心：提取最终结果（需根据实际输出格式调整）
+        # --------------------------
+        # 示例1：假设结果在输出的最后几行（例如最后3行）
+        # lines = full_output.splitlines()
+        # final_result = '\n'.join(lines[-3:]).strip()  # 取最后3行
+        
+        # 示例2：假设结果以"Final Answer:"为前缀
+        # if "Final Answer:" in full_output:
+        #     final_result = full_output.split("Final Answer:")[-1].strip()
+        # else:
+        #     final_result = "未找到明确结果，完整输出：\n" + full_output
+        
+        # 示例3：如果结果是输出的最后一段（无明显标记，直接取全部非空内容）
+        final_result = full_output.strip()  # 去除首尾空行和空格
+        
+        return final_result
+        
+    except subprocess.CalledProcessError as e:
+        try:
+            error_msg = e.stderr.decode('utf-8')
+        except UnicodeDecodeError:
+            error_msg = e.stderr.decode('gbk', errors='replace')
+        return f"命令执行失败: {error_msg}"
+    except Exception as e:
+        return f"发生错误: {str(e)}"
